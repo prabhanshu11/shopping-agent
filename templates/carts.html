@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="carts-page">
+    <section class="card">
+        <h3>Active Shopping Carts</h3>
+        <div id="carts-list" class="carts-list">
+            <p class="loading">Loading...</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h3>Add Item to Cart</h3>
+        <form id="add-to-cart-form" class="add-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="platform">Platform</label>
+                    <select id="platform" required>
+                        <option value="amazon">Amazon</option>
+                        <option value="swiggy">Swiggy</option>
+                        <option value="blinkit">Blinkit</option>
+                        <option value="ubereats">Uber Eats</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="product-id">Product ID / URL</label>
+                    <input type="text" id="product-id" placeholder="B09V3KXJPB or product URL" required>
+                </div>
+                <div class="form-group">
+                    <label for="quantity">Quantity</label>
+                    <input type="number" id="quantity" value="1" min="1" max="10">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add to Cart</button>
+        </form>
+    </section>
+</div>
+
+<div id="cart-detail-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Cart Details - <span id="cart-platform-name"></span></h3>
+        <div id="cart-items-list"></div>
+        <div class="cart-summary">
+            <p><strong>Total:</strong> <span id="cart-total"></span></p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" id="verify-address-btn">Verify Address</button>
+            <button class="btn btn-secondary" onclick="hideCartModal()">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentCartPlatform = null;
+
+document.addEventListener('DOMContentLoaded', loadCarts);
+
+function createTextElement(tag, text, className) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+}
+
+async function loadCarts() {
+    const container = document.getElementById('carts-list');
+    try {
+        const response = await fetch('/api/carts/');
+        const carts = await response.json();
+        container.textContent = '';
+
+        if (carts.length === 0) {
+            container.appendChild(createTextElement('p', 'No active carts. Add items to get started!', 'empty'));
+            return;
+        }
+
+        carts.forEach(cart => {
+            const card = document.createElement('div');
+            card.className = 'cart-card';
+
+            const header = document.createElement('div');
+            header.className = 'cart-header';
+            header.appendChild(createTextElement('h4', cart.platform.charAt(0).toUpperCase() + cart.platform.slice(1)));
+            header.appendChild(createTextElement('span', cart.status,
+                'status-badge' + (cart.status === 'active' ? ' success' : '')));
+
+            const info = document.createElement('div');
+            info.className = 'cart-info';
+            const itemCount = (cart.items && cart.items.products) ? cart.items.products.length : 0;
+            info.appendChild(createTextElement('p', 'Items: ' + itemCount));
+            info.appendChild(createTextElement('p', 'Total: ' + cart.currency + ' ' + (cart.total_amount || 'TBD')));
+            info.appendChild(createTextElement('p', 'Updated: ' + new Date(cart.updated_at).toLocaleDateString()));
+
+            const actions = document.createElement('div');
+            actions.className = 'cart-actions';
+
+            const viewBtn = document.createElement('button');
+            viewBtn.className = 'btn btn-small';
+            viewBtn.textContent = 'View Details';
+            viewBtn.onclick = function() { viewCartDetails(cart.platform); };
+
+            const verifyBtn = document.createElement('button');
+            verifyBtn.className = 'btn btn-small btn-secondary';
+            verifyBtn.textContent = 'Verify Address';
+            verifyBtn.onclick = function() { verifyAddress(cart.platform); };
+
+            actions.appendChild(viewBtn);
+            actions.appendChild(verifyBtn);
+
+            card.appendChild(header);
+            card.appendChild(info);
+            card.appendChild(actions);
+            container.appendChild(card);
+        });
+    } catch (error) {
+        container.textContent = '';
+        container.appendChild(createTextElement('p', 'Failed to load carts', 'error'));
+    }
+}
+
+async function viewCartDetails(platform) {
+    currentCartPlatform = platform;
+    try {
+        const response = await fetch('/api/carts/' + platform);
+        const cart = await response.json();
+
+        if (!cart) {
+            alert('Cart not found');
+            return;
+        }
+
+        document.getElementById('cart-platform-name').textContent =
+            platform.charAt(0).toUpperCase() + platform.slice(1);
+
+        const itemsList = document.getElementById('cart-items-list');
+        itemsList.textContent = '';
+
+        const items = (cart.items && cart.items.products) ? cart.items.products : [];
+        if (items.length === 0) {
+            itemsList.appendChild(createTextElement('p', 'Cart is empty', 'empty'));
+        } else {
+            items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'cart-item';
+                itemEl.appendChild(createTextElement('span', item.product_id, 'product-id'));
+                itemEl.appendChild(createTextElement('span', 'x' + item.quantity, 'quantity'));
+                itemEl.appendChild(createTextElement('span', 'Added: ' + new Date(item.added_at).toLocaleDateString(), 'added-at'));
+                itemsList.appendChild(itemEl);
+            });
+        }
+
+        document.getElementById('cart-total').textContent =
+            cart.currency + ' ' + (cart.total_amount || 'Calculating...');
+
+        document.getElementById('verify-address-btn').onclick = function() {
+            verifyAddress(currentCartPlatform);
+        };
+
+        document.getElementById('cart-detail-modal').classList.remove('hidden');
+    } catch (error) {
+        alert('Failed to load cart details');
+    }
+}
+
+function hideCartModal() {
+    document.getElementById('cart-detail-modal').classList.add('hidden');
+    currentCartPlatform = null;
+}
+
+async function verifyAddress(platform) {
+    try {
+        const response = await fetch('/api/carts/' + platform + '/verify-address', {method: 'POST'});
+        const result = await response.json();
+
+        if (result.valid) {
+            alert('Address verified! All items can be delivered to your address.');
+        } else {
+            alert('Address verification issue: ' + (result.message || 'Some items may not be deliverable'));
+        }
+    } catch (error) {
+        alert('Failed to verify address. Make sure the platform is connected.');
+    }
+}
+
+document.getElementById('add-to-cart-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const platform = document.getElementById('platform').value;
+    const productId = document.getElementById('product-id').value;
+    const quantity = parseInt(document.getElementById('quantity').value);
+
+    try {
+        const response = await fetch('/api/carts/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({platform: platform, product_id: productId, quantity: quantity})
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            alert(result.message);
+            loadCarts();
+            e.target.reset();
+        } else {
+            const error = await response.json();
+            alert('Failed: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error adding to cart');
+    }
+});
+</script>
+{% endblock %}

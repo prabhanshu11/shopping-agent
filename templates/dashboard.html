@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <section class="card">
+        <h3>Connected Platforms</h3>
+        <div id="connected-platforms" class="platform-list">
+            <p class="loading">Loading...</p>
+        </div>
+        <a href="/connectors" class="btn btn-secondary">Manage Connectors</a>
+    </section>
+
+    <section class="card">
+        <h3>Active Carts</h3>
+        <div id="active-carts">
+            <p class="loading">Loading...</p>
+        </div>
+        <a href="/carts" class="btn btn-secondary">View All Carts</a>
+    </section>
+
+    <section class="card">
+        <h3>Recent Orders</h3>
+        <div id="recent-orders">
+            <p class="loading">Loading...</p>
+        </div>
+        <a href="/orders" class="btn btn-secondary">View All Orders</a>
+    </section>
+
+    <section class="card full-width">
+        <h3>Product Search</h3>
+        <form id="search-form" class="search-form">
+            <input type="text" id="search-query" placeholder="Search for products..." required>
+            <select id="search-platform">
+                <option value="amazon">Amazon</option>
+                <option value="swiggy">Swiggy</option>
+                <option value="blinkit">Blinkit</option>
+                <option value="ubereats">Uber Eats</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+        <div id="search-results" class="search-results"></div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadConnectors();
+    loadCarts();
+    loadOrders();
+});
+
+function createTextElement(tag, text, className) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+}
+
+async function loadConnectors() {
+    const container = document.getElementById('connected-platforms');
+    try {
+        const response = await fetch('/api/connectors/');
+        const connectors = await response.json();
+        container.textContent = '';
+
+        if (connectors.length === 0) {
+            container.appendChild(createTextElement('p', 'No platforms connected yet', 'empty'));
+            return;
+        }
+
+        connectors.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'platform-item ' + (c.is_connected ? 'connected' : 'disconnected');
+
+            const name = createTextElement('span', c.display_name, 'platform-name');
+            const status = createTextElement('span', c.is_connected ? 'Connected' : 'Disconnected',
+                'status-badge ' + (c.is_connected ? 'success' : 'warning'));
+
+            item.appendChild(name);
+            item.appendChild(status);
+            container.appendChild(item);
+        });
+    } catch (error) {
+        container.textContent = '';
+        container.appendChild(createTextElement('p', 'Failed to load', 'error'));
+    }
+}
+
+async function loadCarts() {
+    const container = document.getElementById('active-carts');
+    try {
+        const response = await fetch('/api/carts/');
+        const carts = await response.json();
+        container.textContent = '';
+
+        if (carts.length === 0) {
+            container.appendChild(createTextElement('p', 'No active carts', 'empty'));
+            return;
+        }
+
+        carts.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'cart-item';
+
+            const name = createTextElement('span', c.platform, 'platform-name');
+            const count = createTextElement('span',
+                ((c.items && c.items.products) ? c.items.products.length : 0) + ' items', 'item-count');
+
+            item.appendChild(name);
+            item.appendChild(count);
+            container.appendChild(item);
+        });
+    } catch (error) {
+        container.textContent = '';
+        container.appendChild(createTextElement('p', 'Failed to load', 'error'));
+    }
+}
+
+async function loadOrders() {
+    const container = document.getElementById('recent-orders');
+    try {
+        const response = await fetch('/api/orders/');
+        const data = await response.json();
+        container.textContent = '';
+
+        if (data.total_orders === 0) {
+            container.appendChild(createTextElement('p', 'No recent orders', 'empty'));
+            return;
+        }
+
+        data.orders.slice(0, 5).forEach(o => {
+            const item = document.createElement('div');
+            item.className = 'order-item';
+
+            const id = createTextElement('span', o.order_id, 'order-id');
+            const status = createTextElement('span', o.status, 'status-badge');
+
+            item.appendChild(id);
+            item.appendChild(status);
+            container.appendChild(item);
+        });
+    } catch (error) {
+        container.textContent = '';
+        container.appendChild(createTextElement('p', 'Failed to load', 'error'));
+    }
+}
+
+document.getElementById('search-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const query = document.getElementById('search-query').value;
+    const platform = document.getElementById('search-platform').value;
+
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.textContent = '';
+    resultsContainer.appendChild(createTextElement('p', 'Searching...', 'loading'));
+
+    try {
+        const response = await fetch('/api/products/search', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({query, platform, limit: 10})
+        });
+
+        if (!response.ok) throw new Error('Search failed');
+
+        const products = await response.json();
+        resultsContainer.textContent = '';
+
+        if (products.length === 0) {
+            resultsContainer.appendChild(createTextElement('p', 'No products found', 'empty'));
+            return;
+        }
+
+        products.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+
+            card.appendChild(createTextElement('h4', p.name));
+            card.appendChild(createTextElement('p', p.currency + ' ' + p.price, 'price'));
+            card.appendChild(createTextElement('p', 'Rating: ' + (p.rating || 'N/A'), 'rating'));
+
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-small';
+            btn.textContent = 'Add to Cart';
+            btn.onclick = function() { addToCart(platform, p.product_id); };
+            card.appendChild(btn);
+
+            resultsContainer.appendChild(card);
+        });
+    } catch (error) {
+        resultsContainer.textContent = '';
+        resultsContainer.appendChild(createTextElement('p', 'Search failed. Make sure the platform is connected.', 'error'));
+    }
+});
+
+async function addToCart(platform, productId) {
+    try {
+        const response = await fetch('/api/carts/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({platform: platform, product_id: productId, quantity: 1})
+        });
+
+        if (response.ok) {
+            alert('Added to cart!');
+            loadCarts();
+        } else {
+            alert('Failed to add to cart');
+        }
+    } catch (error) {
+        alert('Error adding to cart');
+    }
+}
+</script>
+{% endblock %}

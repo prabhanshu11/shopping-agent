@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Shopping Agent</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo">
+            <h2>Shopping Agent</h2>
+        </div>
+        <ul class="nav-links">
+            <li><a href="/" class="{% if title == 'Shopping Agent' %}active{% endif %}">Dashboard</a></li>
+            <li><a href="/connectors" class="{% if title == 'Platform Connectors' %}active{% endif %}">Connectors</a></li>
+            <li><a href="/carts" class="{% if title == 'Shopping Carts' %}active{% endif %}">Carts</a></li>
+            <li><a href="/orders" class="{% if title == 'Order Tracking' %}active{% endif %}">Orders</a></li>
+        </ul>
+    </nav>
+    <main class="content">
+        <header>
+            <h1>{{ title }}</h1>
+        </header>
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

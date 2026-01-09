@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="connectors-page">
+    <section class="card">
+        <h3>Available Platforms</h3>
+        <p class="description">Connect your accounts to enable shopping features.</p>
+
+        <div id="platforms-grid" class="platforms-grid">
+            <div class="platform-card" data-platform="amazon">
+                <div class="platform-header">
+                    <h4>Amazon</h4>
+                    <span id="amazon-status" class="status-badge">Not Connected</span>
+                </div>
+                <p>E-commerce shopping - Add products to cart, track orders</p>
+                <div class="platform-actions">
+                    <button class="btn btn-primary" onclick="showConnectModal('amazon')">Connect</button>
+                    <button class="btn btn-secondary" onclick="testConnection('amazon')">Test</button>
+                </div>
+            </div>
+
+            <div class="platform-card" data-platform="swiggy">
+                <div class="platform-header">
+                    <h4>Swiggy</h4>
+                    <span id="swiggy-status" class="status-badge">Not Connected</span>
+                </div>
+                <p>Food delivery - Browse restaurants, order food</p>
+                <div class="platform-actions">
+                    <button class="btn btn-primary" onclick="showConnectModal('swiggy')">Connect</button>
+                    <button class="btn btn-secondary" onclick="testConnection('swiggy')">Test</button>
+                </div>
+            </div>
+
+            <div class="platform-card" data-platform="blinkit">
+                <div class="platform-header">
+                    <h4>Blinkit</h4>
+                    <span id="blinkit-status" class="status-badge">Not Connected</span>
+                </div>
+                <p>Quick commerce - Groceries and essentials delivery</p>
+                <div class="platform-actions">
+                    <button class="btn btn-primary" onclick="showConnectModal('blinkit')">Connect</button>
+                    <button class="btn btn-secondary" onclick="testConnection('blinkit')">Test</button>
+                </div>
+            </div>
+
+            <div class="platform-card" data-platform="ubereats">
+                <div class="platform-header">
+                    <h4>Uber Eats</h4>
+                    <span id="ubereats-status" class="status-badge">Not Connected</span>
+                </div>
+                <p>Food delivery - Global restaurant network</p>
+                <div class="platform-actions">
+                    <button class="btn btn-primary" onclick="showConnectModal('ubereats')">Connect</button>
+                    <button class="btn btn-secondary" onclick="testConnection('ubereats')">Test</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card">
+        <h3>Connected Accounts</h3>
+        <div id="connected-list" class="connected-list">
+            <p class="loading">Loading...</p>
+        </div>
+    </section>
+</div>
+
+<div id="connect-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Connect <span id="modal-platform-name"></span></h3>
+        <form id="connect-form">
+            <input type="hidden" id="modal-platform" name="platform">
+
+            <div class="form-group">
+                <label for="api-key">API Key (optional)</label>
+                <input type="password" id="api-key" name="api_key" placeholder="Enter API key if available">
+            </div>
+
+            <div class="form-group">
+                <label for="access-token">Access Token (optional)</label>
+                <input type="password" id="access-token" name="access_token" placeholder="Enter access token">
+            </div>
+
+            <p class="note">
+                <strong>Note:</strong> Most platforms don't provide public APIs for buyers.
+                The agent will use browser automation to interact with the platform securely.
+            </p>
+
+            <div class="modal-actions">
+                <button type="submit" class="btn btn-primary">Connect</button>
+                <button type="button" class="btn btn-secondary" onclick="hideConnectModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadConnectorStatus);
+
+function createTextElement(tag, text, className) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+}
+
+async function loadConnectorStatus() {
+    const listContainer = document.getElementById('connected-list');
+    try {
+        const response = await fetch('/api/connectors/');
+        const connectors = await response.json();
+
+        connectors.forEach(c => {
+            const statusEl = document.getElementById(c.platform + '-status');
+            if (statusEl) {
+                statusEl.textContent = c.is_connected ? 'Connected' : 'Configured';
+                statusEl.className = 'status-badge' + (c.is_connected ? ' success' : '');
+            }
+        });
+
+        listContainer.textContent = '';
+        if (connectors.length === 0) {
+            listContainer.appendChild(createTextElement('p', 'No platforms connected yet', 'empty'));
+            return;
+        }
+
+        connectors.forEach(c => {
+            const item = document.createElement('div');
+            item.className = 'connected-item';
+
+            const info = document.createElement('div');
+            info.className = 'connected-info';
+            info.appendChild(createTextElement('strong', c.display_name));
+            info.appendChild(createTextElement('span', c.is_connected ? 'Active' : 'Inactive',
+                'status-badge ' + (c.is_connected ? 'success' : 'warning')));
+
+            const actions = document.createElement('div');
+            actions.className = 'connected-actions';
+
+            const testBtn = document.createElement('button');
+            testBtn.className = 'btn btn-small';
+            testBtn.textContent = 'Test';
+            testBtn.onclick = function() { testConnection(c.platform); };
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-small btn-danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = function() { deleteConnector(c.platform); };
+
+            actions.appendChild(testBtn);
+            actions.appendChild(removeBtn);
+
+            item.appendChild(info);
+            item.appendChild(actions);
+            listContainer.appendChild(item);
+        });
+    } catch (error) {
+        listContainer.textContent = '';
+        listContainer.appendChild(createTextElement('p', 'Failed to load', 'error'));
+    }
+}
+
+function showConnectModal(platform) {
+    document.getElementById('modal-platform').value = platform;
+    document.getElementById('modal-platform-name').textContent = platform.charAt(0).toUpperCase() + platform.slice(1);
+    document.getElementById('connect-modal').classList.remove('hidden');
+}
+
+function hideConnectModal() {
+    document.getElementById('connect-modal').classList.add('hidden');
+    document.getElementById('connect-form').reset();
+}
+
+document.getElementById('connect-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const platform = document.getElementById('modal-platform').value;
+    const apiKey = document.getElementById('api-key').value;
+    const accessToken = document.getElementById('access-token').value;
+
+    try {
+        const response = await fetch('/api/connectors/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                platform: platform,
+                api_key: apiKey || null,
+                access_token: accessToken || null
+            })
+        });
+
+        if (response.ok) {
+            hideConnectModal();
+            loadConnectorStatus();
+            alert('Platform connected successfully!');
+        } else {
+            const error = await response.json();
+            alert('Failed to connect: ' + error.detail);
+        }
+    } catch (error) {
+        alert('Error connecting platform');
+    }
+});
+
+async function testConnection(platform) {
+    try {
+        const response = await fetch('/api/connectors/' + platform + '/test', {method: 'POST'});
+        const result = await response.json();
+        alert(result.message);
+        loadConnectorStatus();
+    } catch (error) {
+        alert('Test failed');
+    }
+}
+
+async function deleteConnector(platform) {
+    if (!confirm('Remove ' + platform + ' connector?')) return;
+
+    try {
+        const response = await fetch('/api/connectors/' + platform, {method: 'DELETE'});
+        if (response.ok) {
+            loadConnectorStatus();
+        } else {
+            alert('Failed to remove connector');
+        }
+    } catch (error) {
+        alert('Error removing connector');
+    }
+}
+</script>
+{% endblock %}

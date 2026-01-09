@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="orders-page">
+    <section class="card">
+        <h3>Filter Orders</h3>
+        <div class="filter-bar">
+            <select id="platform-filter">
+                <option value="">All Platforms</option>
+                <option value="amazon">Amazon</option>
+                <option value="swiggy">Swiggy</option>
+                <option value="blinkit">Blinkit</option>
+                <option value="ubereats">Uber Eats</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadOrders()">Refresh</button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h3>Order History</h3>
+        <div id="orders-list" class="orders-list">
+            <p class="loading">Loading...</p>
+        </div>
+    </section>
+</div>
+
+<div id="order-detail-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Order Details</h3>
+        <div id="order-details-content"></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="hideOrderModal()">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadOrders);
+
+function createTextElement(tag, text, className) {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+}
+
+async function loadOrders() {
+    const platformFilter = document.getElementById('platform-filter').value;
+    const container = document.getElementById('orders-list');
+    container.textContent = '';
+    container.appendChild(createTextElement('p', 'Loading...', 'loading'));
+
+    try {
+        let url = '/api/orders/';
+        if (platformFilter) {
+            url = '/api/orders/' + platformFilter;
+        }
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        let orders = [];
+        if (platformFilter) {
+            orders = data;
+        } else {
+            orders = data.orders || [];
+        }
+
+        container.textContent = '';
+
+        if (orders.length === 0) {
+            container.appendChild(createTextElement('p', 'No orders found', 'empty'));
+            return;
+        }
+
+        orders.forEach(order => {
+            const card = document.createElement('div');
+            card.className = 'order-card';
+
+            const header = document.createElement('div');
+            header.className = 'order-header';
+            header.appendChild(createTextElement('span', order.order_id, 'order-id'));
+            header.appendChild(createTextElement('span', order.platform || platformFilter, 'platform-badge'));
+
+            const info = document.createElement('div');
+            info.className = 'order-info';
+
+            const statusLine = document.createElement('p');
+            statusLine.appendChild(createTextElement('strong', 'Status: '));
+            statusLine.appendChild(createTextElement('span', order.status, 'status-badge status-' + order.status));
+            info.appendChild(statusLine);
+
+            info.appendChild(createTextElement('p', 'Total: ' + order.currency + ' ' + order.total_amount));
+            info.appendChild(createTextElement('p', 'Ordered: ' + new Date(order.ordered_at).toLocaleDateString()));
+            if (order.estimated_delivery) {
+                info.appendChild(createTextElement('p', 'Est. Delivery: ' + new Date(order.estimated_delivery).toLocaleDateString()));
+            }
+
+            const items = document.createElement('div');
+            items.className = 'order-items';
+            items.appendChild(createTextElement('strong', 'Items:'));
+            const itemList = document.createElement('ul');
+            (order.items || []).forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = (item.name || item.product_id) + ' x' + item.quantity;
+                itemList.appendChild(li);
+            });
+            items.appendChild(itemList);
+
+            const actions = document.createElement('div');
+            actions.className = 'order-actions';
+            const trackBtn = document.createElement('button');
+            trackBtn.className = 'btn btn-small';
+            trackBtn.textContent = 'Track Order';
+            trackBtn.onclick = function() {
+                viewOrderDetails(order.platform || platformFilter, order.order_id);
+            };
+            actions.appendChild(trackBtn);
+
+            card.appendChild(header);
+            card.appendChild(info);
+            card.appendChild(items);
+            card.appendChild(actions);
+            container.appendChild(card);
+        });
+    } catch (error) {
+        container.textContent = '';
+        container.appendChild(createTextElement('p', 'Failed to load orders. Make sure platforms are connected.', 'error'));
+    }
+}
+
+async function viewOrderDetails(platform, orderId) {
+    try {
+        const response = await fetch('/api/orders/' + platform + '/' + orderId);
+        const order = await response.json();
+
+        const content = document.getElementById('order-details-content');
+        content.textContent = '';
+
+        const detail = document.createElement('div');
+        detail.className = 'order-detail';
+
+        detail.appendChild(createTextElement('p', 'Order ID: ' + order.order_id));
+        detail.appendChild(createTextElement('p', 'Platform: ' + order.platform));
+
+        const statusLine = document.createElement('p');
+        statusLine.appendChild(createTextElement('strong', 'Status: '));
+        statusLine.appendChild(createTextElement('span', order.status, 'status-badge status-' + order.status));
+        detail.appendChild(statusLine);
+
+        detail.appendChild(createTextElement('p', 'Total: ' + order.currency + ' ' + order.total_amount));
+        detail.appendChild(document.createElement('hr'));
+
+        detail.appendChild(createTextElement('h4', 'Items'));
+        const itemList = document.createElement('ul');
+        (order.items || []).forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = (item.name || item.product_id) + ' - Qty: ' + item.quantity + ' - ' + order.currency + ' ' + (item.price || 'N/A');
+            itemList.appendChild(li);
+        });
+        detail.appendChild(itemList);
+
+        if (order.tracking_info) {
+            detail.appendChild(document.createElement('hr'));
+            detail.appendChild(createTextElement('h4', 'Tracking Information'));
+            detail.appendChild(createTextElement('p', 'Carrier: ' + (order.tracking_info.carrier || 'N/A')));
+            detail.appendChild(createTextElement('p', 'Tracking #: ' + (order.tracking_info.tracking_number || 'N/A')));
+            detail.appendChild(createTextElement('p', 'Last Update: ' + (order.tracking_info.last_update || 'N/A')));
+        }
+
+        detail.appendChild(document.createElement('hr'));
+        detail.appendChild(createTextElement('p', 'Ordered: ' + new Date(order.ordered_at).toLocaleString()));
+        if (order.estimated_delivery) {
+            detail.appendChild(createTextElement('p', 'Est. Delivery: ' + new Date(order.estimated_delivery).toLocaleString()));
+        }
+        if (order.delivered_at) {
+            detail.appendChild(createTextElement('p', 'Delivered: ' + new Date(order.delivered_at).toLocaleString()));
+        }
+
+        content.appendChild(detail);
+        document.getElementById('order-detail-modal').classList.remove('hidden');
+    } catch (error) {
+        alert('Failed to load order details');
+    }
+}
+
+function hideOrderModal() {
+    document.getElementById('order-detail-modal').classList.add('hidden');
+}
+
+document.getElementById('platform-filter').addEventListener('change', loadOrders);
+</script>
+{% endblock %}
