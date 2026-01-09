@@ -152,3 +152,64 @@ async def get_all_orders(
         "total_orders": len(all_orders),
         "orders": all_orders,
     }
+
+
+@router.get("/{platform}/cancelled")
+async def get_cancelled_orders(
+    platform: str,
+    limit: int = 20,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Get cancelled orders from a specific platform with full details.
+
+    Returns:
+    - Order items
+    - Cancellation reason
+    - Cancellation date (who cancelled: customer/seller/system)
+    - Payment status
+    - Refund information (status, amount, method, completion date)
+
+    Args:
+        platform: Platform name (e.g., 'amazon')
+        limit: Maximum number of orders to fetch
+
+    Returns:
+        List of cancelled orders with full cancellation details
+    """
+    # Get connector
+    result = await session.execute(
+        select(Connector).where(Connector.platform == platform)
+    )
+    connector_model = result.scalar_one_or_none()
+
+    if not connector_model:
+        raise HTTPException(status_code=404, detail="Connector not configured")
+
+    connector = get_connector(
+        platform,
+        api_key=connector_model.api_key,
+        access_token=connector_model.access_token,
+    )
+
+    # Fetch cancelled orders (only Amazon supports this currently)
+    try:
+        if hasattr(connector, "get_cancelled_orders"):
+            cancelled_orders = await connector.get_cancelled_orders(limit)
+            return {
+                "platform": platform,
+                "count": len(cancelled_orders),
+                "cancelled_orders": cancelled_orders,
+            }
+        else:
+            raise HTTPException(
+                status_code=501,
+                detail=f"Cancelled orders not implemented for {platform}",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch cancelled orders: {str(e)}",
+        )

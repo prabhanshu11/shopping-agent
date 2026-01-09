@@ -147,26 +147,47 @@ class AmazonConnector(BaseConnector):
         """
         Get current cart contents using UI-Agent.
 
-        Returns:
-            Cart information with items
+        Returns combined Regular + Fresh cart data with clear sections.
+        Also includes "Saved for Later" items for reference.
         """
         try:
             result = await self._call_ui_agent("/amazon/cart")
+
+            # Parse the new combined response format
+            regular_cart = result.get("regular_cart", {})
+            fresh_cart = result.get("fresh_cart", {})
+            saved_for_later = result.get("saved_for_later", {})
+
             return {
-                "cart_id": "amazon-cart",
-                "items": result.get("items", []),
-                "subtotal": result.get("subtotal"),
-                "currency": "INR",
-                "items_count": result.get("item_count", 0),
+                "regular_cart": {
+                    "cart_id": "amazon-regular",
+                    "cart_type": "regular",
+                    "items": regular_cart.get("items", []),
+                    "subtotal": regular_cart.get("subtotal"),
+                    "currency": "INR",
+                    "item_count": regular_cart.get("item_count", 0),
+                },
+                "fresh_cart": {
+                    "cart_id": "amazon-fresh",
+                    "cart_type": "fresh",
+                    "items": fresh_cart.get("items", []),
+                    "subtotal": fresh_cart.get("subtotal"),
+                    "currency": "INR",
+                    "item_count": fresh_cart.get("item_count", 0),
+                },
+                "saved_for_later": {
+                    "items": saved_for_later.get("items", []),
+                    "item_count": saved_for_later.get("item_count", 0),
+                },
+                "combined_item_count": result.get("combined_item_count", 0),
             }
         except Exception as e:
             logger.error("Get cart failed: %s", str(e))
             return {
-                "cart_id": None,
-                "items": [],
-                "subtotal": 0.0,
-                "currency": "INR",
-                "items_count": 0,
+                "regular_cart": {"cart_id": None, "cart_type": "regular", "items": [], "subtotal": 0.0, "currency": "INR", "item_count": 0},
+                "fresh_cart": {"cart_id": None, "cart_type": "fresh", "items": [], "subtotal": 0.0, "currency": "INR", "item_count": 0},
+                "saved_for_later": {"items": [], "item_count": 0},
+                "combined_item_count": 0,
                 "error": str(e),
             }
 
@@ -214,9 +235,27 @@ class AmazonConnector(BaseConnector):
         Returns:
             List of recent orders
         """
-        # TODO: Implement via UI-Agent
-        # Would need to navigate to order history and extract orders
+        # TODO: Implement general order history via UI-Agent
         return []
+
+    async def get_cancelled_orders(self, limit: int = 20) -> list[dict]:
+        """
+        Get cancelled orders with full details using UI-Agent.
+
+        Returns cancellation reason, dates, payment status, refund info.
+
+        Args:
+            limit: Max orders to fetch
+
+        Returns:
+            List of cancelled orders with full details
+        """
+        try:
+            result = await self._call_ui_agent(f"/amazon/orders/cancelled?limit={limit}")
+            return result.get("cancelled_orders", [])
+        except Exception as e:
+            logger.error("Get cancelled orders failed: %s", str(e))
+            return []
 
     async def get_order_status(self, order_id: str) -> OrderInfo:
         """
