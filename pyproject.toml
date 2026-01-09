@@ -1,7 +1,7 @@
 [project]
 name = "shopping-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "Multi-platform shopping assistant with AI-powered navigation"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -13,4 +13,9 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "sqlalchemy>=2.0.45",
     "uvicorn>=0.40.0",
+]
+
+[project.optional-dependencies]
+ai = [
+    "claude-agent-sdk>=0.1.19",
 ]

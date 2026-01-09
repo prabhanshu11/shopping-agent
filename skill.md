@@ -145,62 +145,92 @@ Array.from(document.querySelectorAll("#sc-active-cart .sc-list-item-content"))
 
 ### 1. Claude Agent SDK Integration
 
-**Research Complete**: The Claude Agent SDK (Python) is the same infrastructure powering Claude Code.
+**Status**: IMPLEMENTED (2026-01-09)
 
 **Installation**:
 ```bash
 pip install claude-agent-sdk
+# Or for this project:
+pip install -e ".[ai]"
 ```
 
-**Key Features**:
-- `query()` function for simple async queries
-- `ClaudeSDKClient` for interactive bidirectional conversations
-- Custom in-process MCP servers (no subprocess overhead)
-- Hooks system for intercepting tool calls
-- Built-in tools: Read, Write, Bash, and more
+**Implementation**: `app/agent/shopping_agent.py`
 
-**Integration Plan for Shopping Agent**:
+The ShoppingAgent class provides:
+1. **Deterministic API wrappers** - Direct calls to UI-Agent endpoints
+2. **AI-powered fallback** - Uses Claude when deterministic approaches fail
+
+**Key Features Used**:
+- `ClaudeSDKClient` for interactive conversations
+- `@tool` decorator for custom MCP tools
+- `create_sdk_mcp_server()` for in-process tool servers
+
+**Custom Tools Created**:
 ```python
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, tool
+@tool("navigate_to_product", "Navigate to product page", {"asin": str})
+@tool("click_element", "Click an element", {"selector": str})
+@tool("get_page_text", "Get page content", {})
+@tool("verify_cart_item", "Check if item is in cart", {"asin": str})
+@tool("dismiss_popup", "Dismiss any visible popup", {})
+```
 
-# Create custom tools for e-commerce operations
-@tool("add_to_cart", "Add product to cart", {"asin": str, "quantity": int})
-async def add_to_cart(args):
-    # Implementation using UI-Agent
-    pass
+**Usage**:
+```python
+from app.agent import ShoppingAgent, ShoppingAgentConfig
 
-@tool("verify_address", "Verify delivery address", {"expected_pincode": str})
-async def verify_address(args):
-    # Check current address matches expected
-    pass
-
-# Use Claude to adaptively navigate
-options = ClaudeAgentOptions(
-    system_prompt="You are a shopping assistant navigating e-commerce sites",
-    allowed_tools=["add_to_cart", "verify_address", "Read", "Bash"],
-    permission_mode='acceptEdits'
-)
-
-async with ClaudeSDKClient(options=options) as client:
-    await client.query("Add Zippo Fluid to cart with Bangalore address")
+async with ShoppingAgent() as agent:
+    result = await agent.add_items_to_cart(
+        items=[{"asin": "B08HNB2FSH", "name": "Smart Plug"}],
+        expected_pincode="560043",
+        use_ai_fallback=True,  # Enable Claude for error recovery
+    )
 ```
 
 **Benefits**:
 - Self-healing: AI interprets page semantically, not via brittle selectors
 - Adaptive: Can try alternative approaches when blocked
-- Learning: Logs can train better prompts and tool descriptions
+- Graceful degradation: Works without SDK, just loses AI fallback
 
 **Sources**:
-- [Claude Agent SDK Documentation](https://platform.claude.com/docs/en/agent-sdk/overview)
-- [Python SDK GitHub](https://github.com/anthropics/claude-agent-sdk-python)
-- [Building Agents Guide](https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk)
+- [Claude Agent SDK GitHub](https://github.com/anthropics/claude-agent-sdk-python)
+- [PyPI Package](https://pypi.org/project/claude-agent-sdk/)
 
 ### 2. Passkey Authentication Flow
-Implement seamless FIDO2/WebAuthn authentication:
-- Detect when security key PIN is required
-- Present PIN input interface (terminal or web UI)
-- Forward PIN to browser security dialog
-- Notify user when touch is required on security key
+
+**Status**: IMPLEMENTED (2026-01-09)
+
+**Implementation**: UI-Agent `src/auth/passkey.py`
+
+**API Endpoints**:
+- `POST /auth/passkey/start` - Start passkey flow (enters email, clicks passkey button)
+- `POST /auth/passkey/pin` - Submit PIN (types via ydotool, shows touch notification)
+- `GET /auth/passkey/status` - Check current passkey flow state
+
+**How It Works**:
+1. Browser navigates to login page, enters email
+2. Clicks "Sign in with passkey" button
+3. API returns "waiting_for_pin" status
+4. User/client provides PIN via `/auth/passkey/pin`
+5. ydotool types PIN into browser's security dialog
+6. Desktop notification prompts user to touch YubiKey
+
+**Site Patterns Supported**:
+- Amazon (email, continue, passkey button)
+- Google (email, passkey button)
+- GitHub (login, passkey button)
+
+**Usage**:
+```bash
+# Start passkey flow
+curl -X POST http://localhost:8000/auth/passkey/start \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://amazon.in/ap/signin", "email": "user@example.com", "site": "amazon"}'
+
+# Provide PIN when prompted
+curl -X POST http://localhost:8000/auth/passkey/pin \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "1234"}'
+```
 
 ### 3. Comprehensive Logging Infrastructure
 Build logging system that captures:
