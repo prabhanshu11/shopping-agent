@@ -1,6 +1,6 @@
 """Platform connectors for shopping agent."""
 
-from app.connectors.base import BaseConnector, ProductSearchResult, CartItem, AddressInfo, OrderInfo
+from app.connectors.base import BaseConnector, ProductSearchResult, CartItem, AddressInfo, OrderInfo, PurchaseItem, Purchase
 from app.connectors.amazon import AmazonConnector
 from app.connectors.swiggy import SwiggyConnector
 from app.connectors.blinkit import BlinKitConnector
@@ -39,6 +39,8 @@ __all__ = [
     "CartItem",
     "AddressInfo",
     "OrderInfo",
+    "PurchaseItem",
+    "Purchase",
     "AmazonConnector",
     "SwiggyConnector",
     "BlinKitConnector",

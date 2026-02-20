@@ -28,14 +28,70 @@ class CartItem(BaseModel):
 
 class AddressInfo(BaseModel):
     """Standard address information."""
+    id: str | None = None  # e.g. "addr_01"
     name: str
-    address_line1: str
-    address_line2: str | None = None
+    address_line1: str  # House number and street name
+    address_line2: str | None = None  # Apartment, suite, unit
     city: str
     state: str
     pincode: str
+    country: str = "India"
     phone: str | None = None
     is_default: bool = False
+
+    @classmethod
+    def load_from_datalake(cls, address_id: str | None = None) -> list["AddressInfo"] | "AddressInfo":
+        """Load addresses from datalake. Returns single address if id given, else all."""
+        import json
+        from pathlib import Path
+        data_path = Path.home() / "Programs/datalake/data/personal/addresses.json"
+        with open(data_path) as f:
+            data = json.load(f)
+        addresses = [cls(**addr) for addr in data["addresses"]]
+        if address_id:
+            return next(a for a in addresses if a.id == address_id)
+        return addresses
+
+
+class PurchaseItem(BaseModel):
+    """Single item in a purchase."""
+    name: str
+    specs: str | None = None
+    quantity: int = 1
+    unit_price: float
+    currency: str = "INR"
+    category: str | None = None
+    purpose: str | None = None
+
+
+class Purchase(BaseModel):
+    """A completed purchase/order record."""
+    id: str  # e.g. "purchase_001"
+    order_number: str
+    date: str  # ISO date
+    platform: str
+    platform_url: str | None = None
+    items: list[PurchaseItem]
+    subtotal: float
+    shipping: float = 0.0
+    convenience_fee: float = 0.0
+    total: float
+    currency: str = "INR"
+    payment_method: str | None = None
+    billing_address_id: str | None = None
+    shipping_address_id: str | None = None
+    status: str = "confirmed"
+    research_doc: str | None = None  # Path to related research
+
+    @classmethod
+    def load_from_datalake(cls) -> list["Purchase"]:
+        """Load all purchases from datalake."""
+        import json
+        from pathlib import Path
+        data_path = Path.home() / "Programs/datalake/data/personal/purchases.json"
+        with open(data_path) as f:
+            data = json.load(f)
+        return [cls(**p) for p in data["purchases"]]
 
 
 class OrderInfo(BaseModel):

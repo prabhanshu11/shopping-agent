@@ -11,6 +11,7 @@ from pathlib import Path
 from app.config import settings
 from app.database import init_db
 from app.api import connectors, products, carts, orders
+from app.api import runs
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(connectors.router)
 app.include_router(products.router)
 app.include_router(carts.router)
 app.include_router(orders.router)
+app.include_router(runs.router)
 
 
 @app.get("/")
@@ -86,6 +88,15 @@ async def orders_page(request: Request):
     return templates.TemplateResponse(
         "orders.html",
         {"request": request, "title": "Order Tracking"},
+    )
+
+
+@app.get("/runs")
+async def runs_page(request: Request):
+    """Agent runs visualization page."""
+    return templates.TemplateResponse(
+        "runs.html",
+        {"request": request, "title": "Agent Runs"},
     )
 
 
