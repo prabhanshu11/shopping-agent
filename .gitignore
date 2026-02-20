@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# PII / address data (actual data in datalake)
+addresses.json
